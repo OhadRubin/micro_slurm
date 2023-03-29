@@ -24,7 +24,8 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 # Celery setup
-celery_app = Celery('microslurm', broker='pyamqp://guest@localhost//')
+celery_app = Celery('microslurm', broker='pyamqp://guest@rabbitmq//')
+
 
 @celery_app.task
 def execute_job(job_id, script):
