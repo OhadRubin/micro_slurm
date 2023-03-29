@@ -5,8 +5,6 @@ from flask_restful import Api, Resource
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from celery import Celery
 
@@ -32,7 +30,6 @@ class Job(Base):
 
 Base.metadata.create_all(engine)
 
-# Celery setup
 celery_app = Celery('microslurm', broker='pyamqp://guest@rabbitmq//')
 
 @celery_app.task
@@ -43,7 +40,6 @@ def execute_job(job_id, script):
     db_session.commit()
 
     try:
-        # subprocess.check_call(script, shell=True)
         process = subprocess.Popen(script, shell=True)
         process.wait()
         job.status = "completed"
@@ -66,7 +62,10 @@ class JobResource(Resource):
 
     def get(self, job_id):
         job = db_session.query(Job).filter(Job.id == job_id).one()
-        return {"job_id": job.id, "status": job.status, "start_time": job.start_time, "end_time": job.end_time}
+        return {"job_id": job.id,
+                "status": job.status,
+                "start_time": job.start_time,
+                "end_time": job.end_time}
 
     def delete(self, job_id):
         job = db_session.query(Job).filter(Job.id == job_id).one()
