@@ -23,3 +23,15 @@ services:
     command: celery -A microslurm:celery_app worker --loglevel=info
     depends_on:
       - rabbitmq
+      
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: microslurm
+      POSTGRES_PASSWORD: microslurm
+      POSTGRES_DB: microslurm_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
