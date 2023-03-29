@@ -35,7 +35,9 @@ def execute_job(job_id, script):
     session.commit()
 
     try:
-        subprocess.check_call(script, shell=True)
+        # subprocess.check_call(script, shell=True)
+        process = subprocess.Popen(script, shell=True)
+        process.wait()
         job.status = "completed"
     except subprocess.CalledProcessError:
         job.status = "failed"
