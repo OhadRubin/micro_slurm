@@ -1,10 +1,8 @@
-import os
 import subprocess
 import time
 from flask import Flask, request
 from flask_restful import Api, Resource
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -13,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from celery import Celery
 
 # Database setup
-engine = create_engine('postgresql://microslurm:microslurm@postgres/microslurm_db', convert_unicode=True)
+engine = create_engine('postgresql://microslurm:microslurm@postgres/microslurm_db')
 
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,
@@ -36,7 +34,6 @@ Base.metadata.create_all(engine)
 
 # Celery setup
 celery_app = Celery('microslurm', broker='pyamqp://guest@rabbitmq//')
-
 
 @celery_app.task
 def execute_job(job_id, script):
