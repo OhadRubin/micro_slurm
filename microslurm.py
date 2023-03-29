@@ -11,9 +11,18 @@ from celery import Celery
 from celery.result import AsyncResult
 from sqlalchemy.orm.exc import NoResultFound
 
-
 # Database setup
-engine = create_engine('postgresql://microslurm:microslurm@postgres/microslurm_db')
+def wait_for_db_connection():
+    while True:
+        try:
+            engine = create_engine('postgresql://microslurm:microslurm@postgres/microslurm_db')
+            engine.connect()
+            return engine
+        except Exception as e:
+            print(f"Failed to connect to the database: {e}")
+            time.sleep(1)
+
+engine = wait_for_db_connection()
 
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,
@@ -34,7 +43,10 @@ class Job(Base):
 
 Base.metadata.create_all(engine)
 
-celery_app = Celery('microslurm', broker='pyamqp://guest@rabbitmq//')
+celery_app = Celery('microslurm',
+                    broker='pyamqp://guest@rabbitmq//',
+                    # backend='db+postgresql://microslurm:microslurm@postgres/microslurm_db'
+                    )
 
 @celery_app.task
 def execute_job(job_id, script):
@@ -58,7 +70,7 @@ def execute_job(job_id, script):
     except Exception as e:
         job.status = "failed"
         print(f"Unexpected error occurred: {e}")
-        worker_session.rollback()
+        worker_session.rollback()        
 
 
     job.end_time = int(time.time())
