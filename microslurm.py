@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 from flask import Flask, request
@@ -7,6 +8,9 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from celery import Celery
+from celery.result import AsyncResult
+from sqlalchemy.orm.exc import NoResultFound
+
 
 # Database setup
 engine = create_engine('postgresql://microslurm:microslurm@postgres/microslurm_db')
@@ -34,21 +38,32 @@ celery_app = Celery('microslurm', broker='pyamqp://guest@rabbitmq//')
 
 @celery_app.task
 def execute_job(job_id, script):
-    job = db_session.query(Job).filter(Job.id == job_id).one()
+    worker_session = sessionmaker(bind=engine)()
+
+    job = worker_session.query(Job).filter(Job.id == job_id).one()
     job.status = "running"
     job.start_time = int(time.time())
-    db_session.commit()
+    worker_session.commit()
 
     try:
         process = subprocess.Popen(script, shell=True)
-        process.wait()
-        job.status = "completed"
+        return_code = process.wait()
+        if return_code == 0:
+            job.status = "completed"
+        else:
+            job.status = "failed"
     except subprocess.CalledProcessError:
         job.status = "failed"
+        worker_session.rollback()
+    except Exception as e:
+        job.status = "failed"
+        print(f"Unexpected error occurred: {e}")
+        worker_session.rollback()
+
 
     job.end_time = int(time.time())
-    db_session.commit()
-    db_session.close()
+    worker_session.commit()
+    worker_session.close()
 
 
 class JobResource(Resource):
@@ -61,16 +76,23 @@ class JobResource(Resource):
         return {"job_id": job.id}
 
     def get(self, job_id):
-        job = db_session.query(Job).filter(Job.id == job_id).one()
+        try:
+            job = db_session.query(Job).filter(Job.id == job_id).one()
+        except NoResultFound:
+            return {"error": "Job not found"}, 404
         return {"job_id": job.id,
                 "status": job.status,
                 "start_time": job.start_time,
                 "end_time": job.end_time}
 
     def delete(self, job_id):
-        job = db_session.query(Job).filter(Job.id == job_id).one()
+        try:
+            job = db_session.query(Job).filter(Job.id == job_id).one()
+        except NoResultFound:
+            return {"error": "Job not found"}, 404
         if job.status == "running":
-            execute_job.AsyncResult(job_id).revoke(terminate=True)
+            result = AsyncResult(job_id, app=celery_app)
+            result.revoke(terminate=True)
             job.status = "failed"
             db_session.commit()
         return {"result": "Job terminated"}
@@ -78,4 +100,5 @@ class JobResource(Resource):
 api.add_resource(JobResource, '/job', '/job/<int:job_id>')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG", False))
+
