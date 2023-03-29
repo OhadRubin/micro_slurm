@@ -18,3 +18,8 @@ services:
     ports:
       - "15672:15672"
       - "5672:5672"
+  worker:
+    build: .
+    command: celery -A microslurm worker --loglevel=info
+    depends_on:
+      - rabbitmq
