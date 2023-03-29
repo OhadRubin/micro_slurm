@@ -20,6 +20,6 @@ services:
       - "5672:5672"
   worker:
     build: .
-    command: celery -A microslurm worker --loglevel=info
+    command: celery -A microslurm:celery_app worker --loglevel=info
     depends_on:
       - rabbitmq
